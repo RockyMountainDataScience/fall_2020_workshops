@@ -1,0 +1,11 @@
+name: rmds-f2020-ws1
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python<=3.8.3
+  - ipython
+  - jupyter
+  - ipykernel
+  - rise
