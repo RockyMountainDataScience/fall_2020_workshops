@@ -1,0 +1,171 @@
+---
+title: "Diamond Dataset Example"
+author: "Jordan Love"
+date: "8/28/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+# The diamonds dataset is part of the ggplot2 library which is part of the "tidyverse"
+```
+
+
+```{r initial_graphic}
+
+diamonds %>%
+  ggplot(aes(x = carat, y = price, color = cut)) +
+  geom_point(alpha = 0.4) +
+  labs(title = "Diamond Price vs. Carat and Cut",
+       caption = "Diamond price (y-axis) is shown as a function of Carat (x-axis) and colored according to the cut quality.",
+       color = 'Cut') +
+  ylab('Price ($)') +
+  xlab('Carat')
+
+```
+
+```{r basic_linear_regression}
+
+model1 <- lm(price ~ cut + carat, data = diamonds)
+
+diamonds$blr <- predict(model1)
+
+diamonds %>%
+  ggplot(aes(x = carat, y = price, color = cut)) +
+  geom_point(alpha = 0.15) +
+  labs(title = "Model 1 - Varying Intercept by Cut Category",
+       caption = str_wrap("Diamond price (y-axis) is shown as a function of Carat (x-axis) and colored according to the cut quality. Fitted lines from a linear regression model with varying intercept and common slope is shown.", 110),
+       color = 'Cut') +
+  ylab('Price ($)') +
+  xlab('Carat') +
+  geom_line(aes(y = blr)) +
+  ylim(c(0, 19000)) +
+  theme(plot.caption = element_text(hjust = 0.5))
+
+```
+
+```{r individual_cut_fits_blr}
+
+diamonds %>%
+  ggplot(aes(x = carat, y = price, color = cut)) +
+  facet_wrap(facets = vars(cut)) +
+  geom_point(alpha = 0.01) +
+  labs(title = "Model 1 - Varying Intercept by Cut Category",
+       caption = str_wrap("Diamond price (y-axis) is shown as a function of Carat (x-axis) and colored according to the cut quality. Fitted lines from a linear regression model with varying intercept and common slope is shown.", 110),
+       color = 'Cut') +
+  ylab('Price ($)') +
+  xlab('Carat') +
+  geom_line(aes(y = blr)) +
+  ylim(c(0, 19000)) +
+  theme(plot.caption = element_text(hjust = 0.5))
+
+```
+
+```{r basic_linear_regression_w_interaction}
+
+model2 <- lm(price ~ cut * carat, data = diamonds)
+
+diamonds$blr_int <- predict(model2)
+
+diamonds %>%
+  ggplot(aes(x = carat, y = price, color = cut)) +
+  geom_point(alpha = 0.15) +
+  labs(title = "Model 2 - Varying Slope and Intercept by Cut",
+       caption = str_wrap("Diamond price (y-axis) is shown as a function of Carat (x-axis) and colored according to the cut quality. Fitted lines from a linear regression model with varying intercept and varying slope for each cut category are shown.", 110),
+       color = 'Cut') +
+  ylab('Price ($)') +
+  xlab('Carat') +
+  geom_line(aes(y = blr_int)) +
+  ylim(c(0, 19000)) +
+  theme(plot.caption = element_text(hjust = 0.5))
+
+
+```
+
+```{r individual_cut_fits_blr_int}
+
+diamonds %>%
+  ggplot(aes(x = carat, y = price, color = cut)) +
+  facet_wrap(facets = vars(cut)) +
+  geom_point(alpha = 0.01) +
+  labs(title = "Model 2 - Varying Slope and Intercept by Cut",
+       caption = str_wrap("Diamond price (y-axis) is shown as a function of Carat (x-axis) and colored according to the cut quality. Fitted lines from a linear regression model with varying intercept and varying slope for each cut category are shown.", 110),
+       color = 'Cut') +
+  ylab('Price ($)') +
+  xlab('Carat') +
+  geom_line(aes(y = blr_int)) +
+  ylim(c(0, 19000)) +
+  theme(plot.caption = element_text(hjust = 0.5))
+
+
+```
+
+```{r squared_linear_regression_w_interaction}
+
+model3 <- lm(price ~ carat + poly(carat, 2) * cut, data = diamonds)
+
+diamonds$blr2_int <- predict(model3)
+
+diamonds %>%
+  ggplot(aes(x = carat, y = price, color = cut)) +
+  geom_point(alpha = 0.15) +
+  labs(title = "Model 3 - Second Order Polynomial Fit with Varying Intercept and Slopes",
+       caption = str_wrap("Diamond price (y-axis) is shown as a function of Carat (x-axis) and colored according to the cut quality. Fitted liens from a linear regression model with varying intercept and quadratic terms for each cut category are shown.", 110),
+       color = 'Cut') +
+  ylab('Price ($)') +
+  xlab('Carat') +
+  geom_line(aes(y = blr2_int)) +
+  ylim(c(0, 19000)) +
+  theme(plot.caption = element_text(hjust = 0.5))
+
+```
+
+```{r individual_cut_fits_R_squared}
+
+diamonds %>%
+  ggplot(aes(x = carat, y = price, color = cut)) +
+  facet_wrap(facets = vars(cut)) +
+  geom_point(alpha = 0.01) +
+  labs(title = "Model 3 - Second Order Polynomial Fit with Varying Intercept and Slopes",
+       caption = str_wrap("Diamond price (y-axis) is shown as a function of Carat (x-axis) and colored according to the cut quality. Fitted liens from a linear regression model with varying intercept and quadratic terms for each cut category are shown.", 110),
+       color = 'Cut') +
+  ylab('Price ($)') +
+  xlab('Carat') +
+  geom_line(aes(y = blr2_int)) +
+  ylim(c(0, 19000)) +
+  theme(plot.caption = element_text(hjust = 0.5))
+
+```
+
+```{r loss_functions}
+## MSE
+diamonds %>%
+  summarise(blr_mse = mean((price - blr)^2),
+            blr_int_mse = mean((price - blr_int)^2),
+            blr2_int_mse = mean((price - blr2_int)^2))
+
+## ABS
+diamonds %>%
+  summarise(blr_mse = mean(abs(price - blr)),
+            blr_int_mse = mean(abs(price - blr_int)),
+            blr2_int_mse = mean(abs(price - blr2_int)))
+
+## Custom Loss
+missed_revenue <- function(actual_price, estimated_price){
+  result <- (actual_price - estimated_price) * (estimated_price < actual_price)
+  return(result)
+}
+
+# Sum of Loss
+diamonds %>%
+  summarise(blr_mse = sum(missed_revenue(price, blr)),
+            blr_int_mse = sum(missed_revenue(price, blr_int)),
+            blr2_int_mse = sum(missed_revenue(price, blr2_int)))
+
+# Mean of Loss
+diamonds %>%
+  summarise(blr_mse = mean(missed_revenue(price, blr)),
+            blr_int_mse = mean(missed_revenue(price, blr_int)),
+            blr2_int_mse = mean(missed_revenue(price, blr2_int)))
+```
