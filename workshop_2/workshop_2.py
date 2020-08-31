@@ -239,30 +239,30 @@ for i in k_seq:
     false_vers_train = np.logical_and((neigh.predict(X_train) != y_train), [x == "Versicolor" for x in y_train])
     true_virg_train = np.logical_and((neigh.predict(X_train) == y_train), [x == "Virginica" for x in y_train])
     false_virg_train = np.logical_and((neigh.predict(X_train) != y_train), [x == "Virginica" for x in y_train])
-    axes[0,j].set_title("Train, K=" + str(i) + ", " + "Acc=" + str(round(score_train,2)), fontsize=6)
+    axes[0,j].set_title("Train, K=" + str(i) + ", " + "Acc=" + str(round(score_train,2)), fontsize=12)
     axes[0,j].contourf(xx, yy, Z, cmap=cm, alpha=.8)
     axes[0,j].scatter(X_train[X_test.columns[0]][true_vers_train], X_train[X_test.columns[1]][true_vers_train],
-               marker = 'o', c="red", cmap=cm_bright, edgecolors='k', s=12)
+               marker = 'o', c="red", cmap=cm_bright, edgecolors='k', s=16)
     axes[0,j].scatter(X_train[X_test.columns[0]][false_vers_train], X_train[X_test.columns[1]][false_vers_train],
-                      marker = 'x', c="red", cmap=cm_bright, edgecolors='k', s=12)
+                      marker = 'x', c="red", cmap=cm_bright, edgecolors='k', s=16)
     axes[0,j].scatter(X_train[X_test.columns[0]][true_virg_train], X_train[X_test.columns[1]][true_virg_train],
-               marker = 'o', c="blue", cmap=cm_bright, edgecolors='k', s=12)
+               marker = 'o', c="blue", cmap=cm_bright, edgecolors='k', s=16)
     axes[0,j].scatter(X_train[X_test.columns[0]][false_virg_train], X_train[X_test.columns[1]][false_virg_train],
-                      marker = 'x', c="blue", cmap=cm_bright, edgecolors='k', s=12)
+                      marker = 'x', c="blue", cmap=cm_bright, edgecolors='k', s=16)
     axes[0,j].set_xlim(4, 8.5)
     axes[0,j].set_ylim(1.5, 4.5)
     axes[0,j].set_xticks(())
     axes[0,j].set_yticks(())
-    axes[1,j].set_title("Test, K=" + str(i) + ", " + "Acc=" + str(round(score_test,2)), fontsize=6)
+    axes[1,j].set_title("Test, K=" + str(i) + ", " + "Acc=" + str(round(score_test,2)), fontsize=12)
     axes[1,j].contourf(xx, yy, Z, cmap=cm, alpha=.8)
     axes[1,j].scatter(X_test[X_test.columns[0]][true_vers_test], X_test[X_test.columns[1]][true_vers_test],
-               marker = 'o', c="red", cmap=cm_bright, edgecolors='k',s = 12)
+               marker = 'o', c="red", cmap=cm_bright, edgecolors='k',s = 16)
     axes[1,j].scatter(X_test[X_test.columns[0]][false_vers_test], X_test[X_test.columns[1]][false_vers_test],
-                      marker = 'x', c="red", cmap=cm_bright, edgecolors='k',s = 12)
+                      marker = 'x', c="red", cmap=cm_bright, edgecolors='k',s = 16)
     axes[1,j].scatter(X_test[X_test.columns[0]][true_virg_test], X_test[X_test.columns[1]][true_virg_test],
-               marker = 'o', c="blue", cmap=cm_bright, edgecolors='k',s = 12)
+               marker = 'o', c="blue", cmap=cm_bright, edgecolors='k',s = 16)
     axes[1,j].scatter(X_test[X_test.columns[0]][false_virg_test], X_test[X_test.columns[1]][false_virg_test],
-               marker = 'x', c="blue", cmap=cm_bright, edgecolors='k',s = 12)
+               marker = 'x', c="blue", cmap=cm_bright, edgecolors='k',s = 16)
     axes[1,j].set_xlim(4, 8.5)
     axes[1,j].set_ylim(1.5, 4.5)
     axes[1,j].set_xticks(())
@@ -307,10 +307,10 @@ neigh.fit(X, y)
 score = neigh.score(X, y)
 score
 
-true_vers_test = np.logical_and((neigh.predict(X) == y), [x == "Versicolor" for x in y])
-false_vers_test = np.logical_and((neigh.predict(X) != y), [x == "Versicolor" for x in y])
-true_virg_test = np.logical_and((neigh.predict(X) == y), [x == "Virginica" for x in y])
-false_virg_test = np.logical_and((neigh.predict(X) != y), [x == "Virginica" for x in y])
+true_vers = np.logical_and((neigh.predict(X) == y), [x == "Versicolor" for x in y])
+false_vers = np.logical_and((neigh.predict(X) != y), [x == "Versicolor" for x in y])
+true_virg = np.logical_and((neigh.predict(X) == y), [x == "Virginica" for x in y])
+false_virg = np.logical_and((neigh.predict(X) != y), [x == "Virginica" for x in y])
 
 
 Z = neigh.predict_proba(np.c_[xx.ravel(), yy.ravel()])[:, 1]
@@ -321,8 +321,15 @@ ax = plt.subplot(1, 1, 1)
 ax.set_title("K=" + str(best_k) + ", " + "Accuracy = " + str(score))
 # Plot the training points
 ax.contourf(xx, yy, Z, cmap=cm, alpha=.8)
-ax.scatter(X["sepal.length"], X["sepal.width"],
-           c=y.astype("category").cat.codes, cmap=cm_bright, edgecolors='k')
+ax.scatter(X["sepal.length"][true_vers], X["sepal.width"][true_vers],
+               marker = 'o', c="red", cmap=cm_bright, edgecolors='k', s=12)
+ax.scatter(X["sepal.length"][false_vers], X["sepal.width"][false_vers],
+           marker = 'x', c="red", cmap=cm_bright, edgecolors='k', s=12)
+ax.scatter(X["sepal.length"][true_virg], X["sepal.width"][true_virg],
+           marker = 'o', c="blue", cmap=cm_bright, edgecolors='k', s=12)
+ax.scatter(X["sepal.length"][false_virg], X["sepal.width"][false_virg],
+           marker = 'x', c="blue", cmap=cm_bright, edgecolors='k', s=12)
+
 ax.set_xlim(xx.min(), xx.max())
 ax.set_ylim(yy.min(), yy.max())
 ax.set_xticks(())
