@@ -4,6 +4,63 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 from gpflow.utilities import print_summary
 
+
+
+n = 100
+x = np.random.uniform(0, 20, n)
+y = 3*x + np.random.normal(0, 3, n)
+plt.scatter(x, y)
+plt.show()
+
+
+
+n = 100
+x = np.random.uniform(0, 2*np.pi, n)
+y = np.sin(x) + np.random.normal(0, .3, n)
+plt.scatter(x, y)
+plt.show()
+
+
+
+# Motivate: I have some data I want to model... I don't care about the
+# functional form of the model, but I want a mean and covariance for prediction
+# points.
+
+# First talk about Linear Regression
+# y = f(x) = \theta_1 x_1 + \dots + \theta_p x_p + \epsilon = \mathbf{\theta}^T \mathbf{x} + \epsilon
+# vector form:
+# \mathbf{Y} = \mathbf{f}(\mathbf{x}) = \mathbf{X}^T \mathbf{\theta} + \mathbf{\epsilon}
+# Can solve via:
+# - maximum likelihood
+# - Maximum a posteriori (MAP) estimation
+# - Loss optimization (Least Squares)
+# - maximum likelihood
+
+# Maximum Likelihood:
+# p(w | y) = \prod_{i = 1}^n p(y_i | x)
+# arg max_{w} p(w|x)
+
+
+# Least Squares (Loss Optimization)
+# Min_w || \epsilon ||
+# Min_w || y - \hat y ||
+# put plot here
+
+# Next talk about linear classifiers
+
+
+
+
+
+
+
+
+
+
+
+
+## Gaussian Processes
+
 # The lines below are specific to the notebook format
 # %matplotlib inline
 # plt.rcParams["figure.figsize"] = (12, 6)
