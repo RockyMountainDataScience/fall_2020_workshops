@@ -1,0 +1,17 @@
+name: rmds-f20-ws4
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python<=3.8.3
+  - ipython
+  - jupyter
+  - ipykernel
+  - rise
+  - numpy
+  - scikit-learn
+  - gpflow
+  - matplotlib
+  - pylint
+
