@@ -1,0 +1,795 @@
+---
+title: "Forecasting Time Series"
+subtitle: "Introduction to Expontential Smoothing, ARIMA, and Dynamic Linear Models"
+author: "Jordan Love"
+output:
+  xaringan::moon_reader:
+    css: ["default", "rmds_fonts.css"]
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+      titleSlideClass: [bottom, left]
+      
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+```{r setup, include=FALSE}
+options(htmltools.dir.version = FALSE)
+
+library(tidyverse)
+library(lubridate)
+
+deaths_mt <-
+  read_csv('Repositories/COVID-19/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv') %>%
+  filter(Province_State == "Montana", Admin2 == "Gallatin") %>%
+  select(-c(1:11)) %>%
+  pivot_longer(cols = everything(), names_to = 'Date', values_to = 'Deaths') %>%
+  mutate(Date = parse_date_time(Date, 'mdy')) %>%
+  filter(!is.na(Date)) %>%
+  mutate(`New Reported Deaths` = `Deaths` - lag(`Deaths`))
+
+confirmed_mt <- 
+  read_csv('Repositories/COVID-19/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv') %>%
+  filter(Province_State == "Montana", Admin2 == "Gallatin") %>%
+  select(-c(1:11)) %>%
+  pivot_longer(cols = everything(), names_to = 'Date', values_to = 'Confirmed Cases') %>%
+  mutate(Date = parse_date_time(Date, 'mdy')) %>%
+  mutate(`New Confirmed Cases` = `Confirmed Cases` - lag(`Confirmed Cases`))
+
+covid_mt <-
+  full_join(deaths_mt, confirmed_mt) %>%
+  filter(Date > parse_date_time('01/22/2020', 'mdy'))
+```
+
+# What is Time Series Data?
+
+* Data measured in series or __sequentially__ through time
+
+* A process in which more recent data have a  __dependence__ on previous data
+
+* The study of Time Series in a statistical context focuses on the underlying __correlation structure__ within the data arising due to  serial dependence
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Three Modeling Outcomes
+
+* If we are interested in making conclusions about a specific process, we would like to perform __Inferential Modeling__
+
+* If we are interested only in making the best predictions about future timepoints of a single time series or values of another concurrent time series which have not been observed, we are interested in __Predictive Modeling__
+
+* __Forecasting__ is a form of predictive modeling focused only on the current time series with typically a __one-step ahead prediction__ mindset
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Outline of the Workshop
+
+* Three Methods to Model Time Series
+
+  - Exponential Smoothing
+
+  - ARIMA Modeling
+
+  - Dynamic Linear Models / Hidden Markov Models
+
+* Evaluating Performance
+  
+* Concluding Thoughts
+
+  - Resources + Packages
+  
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Context of the Workshop
+
+* In order to demonstrate each method, we will use COVID-19 Case Count data for Gallatin County as provided by the [Johns Hopkins University Center for Systems Science and Engineering](https://github.com/CSSEGISandData/COVID-19) (JHU CSSE).
+
+* Since this workshop focuses primarily on Statistical techniques, our focus will be split between __ease of understanding model output__ and __predictive accuracy of the model__. 
+
+* More niche techniques could most likely provide better accuracy at the cost of the ability the communicate the model to non-technical audiences. 
+
+* __Nothing in this workshops constitutes an official prediction of COVID-19 Case Counts in Gallatin County__.
+
+---
+class: bottom, left, inverse
+
+# Exponential Smoothing
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Examining the Data
+
+```{r echo=FALSE, warning=FALSE, fig.height=4.5, fig.width=10, fig.retina=2}
+covid_mt %>%
+  ggplot(aes(x = Date, y = `New Confirmed Cases`)) +
+  geom_col() +
+  labs(title = 'New Confirmed COVID-19 Cases by Day',
+       subtitle = 'Data through October 25th, 2020')
+```
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Examining the Data
+
+```{r echo=FALSE, warning=FALSE, fig.height=4.5, fig.width=10, fig.retina=2}
+covid_mt %>%
+  ggplot(aes(x = Date, y = `New Confirmed Cases`)) +
+  geom_point(alpha = 0.35) +
+  labs(title = 'New Confirmed COVID-19 Cases by Day',
+       subtitle = 'Data through October 25th, 2020')
+
+```
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Exponential Smoothing
+
+$$
+\begin{split}
+\hat{y}_{t + h | h} & = l_{t} + hb_t \\
+l_t & = \alpha y_t + (1 - \alpha)(l_{t - 1} + b_{t - 1}) \\
+b_t & = \beta^{*}(l_{t} - l_{t - 1}) + (1 - \beta^{*})b_{t - 1}
+\end{split}
+$$
+* The first equation is known as the __Forecast Equation__ and combines the __Level__ and __Trend__ components into an $h$ step ahead prediction. 
+
+* The second equation is the __Level Equation__ which is the update step for the level component of the model.
+
+* The third equation is the __Trend Equation__ which is the update step for the trend component of the model.
+
+* Collectively, this method is known as __Holt's Linear Trend Method__ and is a subset of the larger __Holt-Winter's exponential smoothing method__. 
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Applying the Method
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.height=4.5, fig.width=10, fig.retina=2}
+library(forecast)
+
+hw_fit <- HoltWinters(covid_mt$`New Confirmed Cases`, gamma = FALSE)
+
+hw_tibble <- tibble(
+  Date = covid_mt$Date[3:277],
+  `Fitted Values` = hw_fit$fitted[,1],
+  `Level Values` = hw_fit$fitted[,2],
+  `Trend Values` = hw_fit$fitted[,3]
+)
+
+covid_mt %>%
+  ggplot(aes(x = Date, y = `New Confirmed Cases`)) +
+  geom_col(alpha = 0.5) +
+  labs(title = "Holt's Linear Trend Method Applied",
+       subtitle = 'Point predictions shown in Red') +
+  geom_line(aes(y = `Fitted Values`), data = hw_tibble, color = 'red')
+```
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Decomposing the Output
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.width=10, fig.retina=2}
+
+hw_tibble <- tibble(
+  Date = covid_mt$Date[3:277],
+  `Fitted Values` = hw_fit$fitted[,1],
+  `Level Values` = hw_fit$fitted[,2],
+  `Trend Values` = hw_fit$fitted[,3]
+) %>%
+  pivot_longer(c(`Fitted Values`, `Level Values`, `Trend Values`), names_to = 'Type', values_to = 'Value')
+
+hw_tibble %>%
+  ggplot(aes(x = Date, y = Value, color = Type)) +
+  facet_grid(rows = vars(Type)) +
+  geom_line()
+
+```
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Interpreting the Model
+
+$$
+\begin{split}
+\hat{y}_{t + h | h} & = l_{t} + hb_t \\
+l_t & = \alpha y_t + (1 - \alpha)(l_{t - 1} + b_{t - 1}) \\
+b_t & = \beta^{*}(l_{t} - l_{t - 1}) + (1 - \beta^{*})b_{t - 1}
+\end{split}
+$$
+
+* Within the COVID-19 Case Count example, we can interpret the level component as __the average number of cases added per day__ and the trend component as the __change in the average number of cases added per day__. 
+
+* Both $\alpha$ and $\beta^{*}$ must be between between 0 and 1. This allows them to be interpreted as a __learning rate parameter__.
+
+* Consider the case when either $\alpha$ or $\beta^{*}$ equals zero (no weight on the present time point) or one (no weight on previous time points).
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Reflecting on Exponential Smoothing
+
+* Easy-to-use method with relatively easy-to-intrepret model outputs. However, depending on the context, the model outputs may not be easily mapped to an intuitive interpretation.
+
+* Exponential smoothing is arguably an effective heuristic and not a modeling tool. This method __does not provide estimates of uncertainty__ around current or future time points. 
+
+* A great tool to be used as a __data exploration technique__ or for basic time series projects not requiring quantification of uncertainty. 
+
+---
+class: bottom, left, inverse
+
+# ARIMA Modeling
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# What's ARIMA?
+
+* ARIMA Modeling is an acronym describing the three components of the model: __Auto-regressive__, __Integrated__, __Moving Average__.
+
+* ARIMA Modeling is a probabilistic method which __explicitly defines serial dependence__ between time points through the three components.
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Auto-regressive components
+
+$$
+y_t = \phi_1 y_{t - 1} + \phi_2 y_{t - 2} + \cdots + \phi_{k} y_{t - k} + \epsilon_t
+$$
+
+* Autoregressive components are define the serial dependence between __previously observed values__ of the time series.
+
+* Using the equation above, we can consider the most recent time point $y_t$ to be the output of a __linear regression__ of previous time points; Hence, "Auto"-"Regression". 
+
+* Using $k$ previous timepoints, this model is often written as $AR(k)$ or an __autoregressive model of order $k$__. 
+
+* In order for ARIMA modeling to be applicable, we typically assume each autoregressive component is bounded to be $|\phi_{i}| < 1$. This condition is known as __stationarity__. 
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Simulated AR(1) Series
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.width=10, fig.retina=2}
+
+set.seed(12345)
+
+n_length <- 100
+n_series <- 5
+
+simulate_ar1 <- function(n_series, n_length, phi){
+  result <- NULL
+  for(i in 1:n_series){
+    series <- rep(0, n_length)
+    for(j in 2:n_length){
+      series[j] <- series[j - 1] * phi + rnorm(1)
+    }
+    result <-
+      bind_rows(
+        result,
+        tibble(
+          Series = i,
+          Phi = phi,
+          Index = 1:n_length,
+          Value = series
+        )
+      )
+  }
+  
+  return(result)
+}
+
+high_ar <- simulate_ar1(3, 100, 0.9) %>%
+  mutate(Type = 'Phi = 0.9')
+low_ar <- simulate_ar1(3, 100, 0.2) %>%
+  mutate(Type = 'Phi = 0.2')
+negative_ar <- simulate_ar1(3, 100, -0.5) %>%
+  mutate(Type = 'Phi = -0.5')
+
+ar_tibble <-
+  bind_rows(
+    high_ar,
+    bind_rows(
+      low_ar,
+      negative_ar
+    )
+  ) %>%
+  mutate(Series = as_factor(Series))
+
+ar_tibble %>%
+  ggplot(aes(x = Index, y = Value, color = Series)) +
+  facet_grid(rows = vars(Type)) +
+  geom_line() +
+  labs(title = 'Simulated AR(1) Series with Varying Phi')
+
+```
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Moving Average Components
+
+$$
+y_t = \epsilon_t + \theta_1 \epsilon_{t - 1} + \theta_2 \epsilon_{t - 2} + \cdots + \theta_k \epsilon_{t - k}
+$$
+
+* Moving average components define the serial dependence between __previous innovation values__ of the time series. An __innovation__ is the randomly observed "error" $\epsilon_i$ at some time point $i$. 
+
+* While not as intuitive, this component defines the current observed value of the time series as a __weighted average of the previous innovations__. It is moving as it is consistently update as the time series progresses.
+
+* Using the $k$ previous innovations, this model is often written as $MA(k)$ or a __moving average model of order $k$__. 
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Simulating MA(1) Series
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.width=10, fig.retina=2}
+
+set.seed(12345)
+
+n_length <- 100
+n_series <- 5
+
+simulate_ma1 <- function(n_series, n_length, theta){
+  result <- NULL
+  for(i in 1:n_series){
+    series <- rep(0, n_length)
+    errors <- rnorm(100, mean = 0, sd = 1)
+    for(j in 2:n_length){
+      series[j] <- errors[j] + theta * errors[j - 1]
+    }
+    result <-
+      bind_rows(
+        result,
+        tibble(
+          Series = i,
+          Theta = theta,
+          Index = 1:n_length,
+          Value = series
+        )
+      )
+  }
+  
+  return(result)
+}
+
+high_ma <- simulate_ma1(3, 100, 0.9) %>%
+  mutate(Type = 'Theta = 0.9')
+low_ma <- simulate_ar1(3, 100, 0.2) %>%
+  mutate(Type = 'Theta = 0.2')
+negative_ma <- simulate_ar1(3, 100, -0.5) %>%
+  mutate(Type = 'Theta = -0.5')
+
+ma_tibble <-
+  bind_rows(
+    high_ma,
+    bind_rows(
+      low_ma,
+      negative_ma
+    )
+  ) %>%
+  mutate(Series = as_factor(Series))
+
+ma_tibble %>%
+  ggplot(aes(x = Index, y = Value, color = Series)) +
+  facet_grid(rows = vars(Type)) +
+  geom_line()
+
+```
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Integrated Component
+
+$$
+y_t = y_{t - 1} + \epsilon_t
+$$
+
+* The integrated component is intended to ensure the resulting time series is __stationary__ by __differencing the series__. 
+
+* The above time series is __not stationary__ since the implied coefficient on the previous timepoint is 1. However, the series can be made to be stationary by __subtracting the previous timepoint__ from each element of the series.
+
+* In this case, we get $y_t - y_{t - 1} = \epsilon_t$ which is simply a __white noise model__ when we assume Normally distributed errors. 
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Non-Stationary AR Series
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.width=10, fig.retina=2}
+
+set.seed(54321)
+
+n_length <- 100
+n_series <- 5
+
+simulate_ar1 <- function(n_series, n_length, phi){
+  result <- NULL
+  for(i in 1:n_series){
+    series <- rep(0, n_length)
+    for(j in 2:n_length){
+      series[j] <- series[j - 1] * phi + rnorm(1)
+    }
+    result <-
+      bind_rows(
+        result,
+        tibble(
+          Series = i,
+          Phi = phi,
+          Index = 1:n_length,
+          Value = series
+        )
+      )
+  }
+  
+  return(result)
+}
+
+high_ar <- simulate_ar1(3, 15, 1) %>%
+  mutate(Type = 'Phi = 1 (Random walk)')
+low_ar <- simulate_ar1(3, 15, 2.5) %>%
+  mutate(Type = 'Phi = 2.5')
+negative_ar <- simulate_ar1(3, 15, -2.5) %>%
+  mutate(Type = 'Phi = -2.5')
+
+ar_tibble <-
+  bind_rows(
+    high_ar,
+    bind_rows(
+      low_ar,
+      negative_ar
+    )
+  ) %>%
+  mutate(Series = as_factor(Series))
+
+ar_tibble %>%
+  ggplot(aes(x = Index, y = Value, color = Series)) +
+  facet_grid(rows = vars(Type)) +
+  geom_line() +
+  labs(title = 'Simulated Non-Stationary Series with Varying Phi')
+
+```
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# ARIMA for COVID-19
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.width=10, fig.retina=2}
+arima_fit <- auto.arima(covid_mt$`New Confirmed Cases`)
+
+arima_tibble <- tibble(
+  Date = covid_mt$Date[1:277],
+  `Fitted Values` = arima_fit$fitted
+)
+
+arima_forecast <- forecast(arima_fit)
+arima_forecast_tibble <-
+  tibble(
+    Date = c(
+      parse_date_time('10/26/2020', 'mdy'),
+      parse_date_time('10/27/2020', 'mdy'),
+      parse_date_time('10/28/2020', 'mdy'),
+      parse_date_time('10/29/2020', 'mdy'),
+      parse_date_time('10/30/2020', 'mdy'),
+      parse_date_time('10/31/2020', 'mdy'),
+      parse_date_time('11/1/2020', 'mdy'),
+      parse_date_time('11/2/2020', 'mdy'),
+      parse_date_time('11/3/2020', 'mdy'),
+      parse_date_time('11/4/2020', 'mdy')
+    ),
+    `Point Forecast` = arima_forecast$mean,
+    `Upper 95%` = arima_forecast$upper[,2],
+    `Lower 95%` = arima_forecast$lower[,2]
+  )
+
+covid_mt %>%
+  ggplot(aes(x = Date, y = `New Confirmed Cases`)) +
+  geom_col(alpha = 0.5) +
+  labs(title = "ARIMA Modeling for COVID-19 Case Counts",
+       subtitle = 'Fitted values shown in Red; Predictions show in Blue') +
+  geom_line(aes(y = `Fitted Values`), data = arima_tibble, color = 'red') +
+  geom_line(aes(y = `Point Forecast`), data = arima_forecast_tibble, color = 'blue') +
+  geom_line(aes(y = `Lower 95%`), data = arima_forecast_tibble, color = 'blue', linetype = 'dashed') +
+  geom_line(aes(y = `Upper 95%`), data = arima_forecast_tibble, color = 'blue', linetype = 'dashed')
+```
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# ARIMA Modeling (again!)
+
+$$ 
+y_t' = \phi_1 y_{t - 1} + \cdots + \phi_{p} y_{t - p} + \epsilon_t + \theta_1 \epsilon_{t - 1} + \cdots + \theta_q \epsilon_{t - q}
+$$
+
+* ARIMA models in general are denoted as $ARIMA(p,d,q)$ with $p$ representing the __order of the autoregressive component__, $d$ representing the __number of times the series was differenced__ to achieve stationarity, and $q$ representing the __order of the moving average component__.
+
+* ARIMA Modeling has several advantages over Exponential Smoothing including __quantification of uncertainty__ and __the ability to include additional covariates__. 
+
+---
+class: bottom, left, inverse
+
+# Dynamic Linear Models (DLMs)
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Hidden Markov Models
+
+<img src="https://avikdas.com/assets/images/2019-06-24-dynamic-programming-for-machine-learning-hidden-markov-models/hmm-bare.png" alt="Example Hidden Markov Model" height="150" style="  display: block; margin-left: auto; margin-right: auto; width: 50%;"/>
+
+
+* In a Hidden Markov Model, we are interested in learning the __hidden states__ of the process while not directly observing them. 
+
+* Example: In a classroom with no windows, you are curious if it is raining outside. In order to determine that, you __count the number of people wearing raincoats__ as they enter class. While you have not directly determined if it is raining or not outside, __you can still infer the state based on auxilary information__. 
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# State Space Models
+
+* Hidden Markov Models and Dynamic Linear Models are both part of a larger class of models known as __State Space Models__. The intention behind these models is to __infer parameters about the underlying process__ which is generating the observed data. 
+
+* Hidden Markov Models and Dynamic Linear Models __differ in the type of latent parameter__ being estimated. Hidden Markov Models have __categorical latent states__ while Dynamic Linear Models have __continuous latent states__.
+
+* In the previous example, we were interested in inferring if it was __raining or not__. However, we could also infer __how much it is raining__ by looking at how wet people are when entering the classroom.
+
+* In our COVID-19 example, we are interested in inferring __the latent rate of infection__ through how many cases we observe each day. 
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# A Local Level Model
+
+$$
+\begin{split}
+y_t & = \theta_t + \nu_t \\
+\theta_t & = \theta_{t - 1} + w_t
+\end{split}
+$$
+
+* The first equation is known as the __observation equation__ and describes the process through which an observation is generated. 
+
+* The second equation is known as the __state equation__ and describes how the underlying system is evolving.
+
+* In this case, the __Local Level Model__ allows the state parameter $\theta$ to vary through time to produce the best fit to the data. This model is known in state-space literature as a __first-order polynomial fit__.  
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Fitting a Local Level Model
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.width=10, fig.retina=2}
+library(dlm)
+
+buildFun <- function(x) {
+  dlmModPoly(order = 1, dV = exp(x[1]), dW = exp(x[2]))
+}
+
+fit <- dlmMLE(covid_mt$`New Confirmed Cases`, parm = c(0,0), build = buildFun)
+dlmFit <- buildFun(fit$par)
+
+filterFit <- dlmFilter(covid_mt$`New Confirmed Cases`, dlmFit)
+forecastFit <- dlmForecast(filterFit, nAhead = 10)
+
+## Forecast Fit Tibble
+dlm_forecast_tibble <-
+  tibble(
+    Date = c(
+      parse_date_time('10/26/2020', 'mdy'),
+      parse_date_time('10/27/2020', 'mdy'),
+      parse_date_time('10/28/2020', 'mdy'),
+      parse_date_time('10/29/2020', 'mdy'),
+      parse_date_time('10/30/2020', 'mdy'),
+      parse_date_time('10/31/2020', 'mdy'),
+      parse_date_time('11/1/2020', 'mdy'),
+      parse_date_time('11/2/2020', 'mdy'),
+      parse_date_time('11/3/2020', 'mdy'),
+      parse_date_time('11/4/2020', 'mdy')
+    ),
+    sqrtR = sapply(forecastFit$R, function(x) sqrt(x[1,1])),
+    `Point Forecast` = forecastFit$a,
+    `Upper 95%` = forecastFit$a + qnorm(0.975, sd = sqrtR),
+    `Lower 95%` = forecastFit$a + qnorm(0.025, sd = sqrtR)
+  )
+
+v <- unlist(dlmSvd2var(filterFit$U.C, filterFit$D.C))
+pl <- dropFirst(filterFit$m) + qnorm(0.05, sd = sqrt(v[-1]))
+pu <- dropFirst(filterFit$m) + qnorm(0.95, sd = sqrt(v[-1]))
+
+library(ggplot2)
+
+covid_mt %>%
+  ggplot(aes(x = Date, y = `New Confirmed Cases`)) +
+  geom_col(alpha = 0.5) +
+  labs(title = "Local Level Model for COVID-19 Case Counts",
+       subtitle = 'Fitted values shown in Red; Predictions show in Blue') +
+  geom_line(aes(y = filterFit$m[2:278]), alpha = 0.75, color = 'red') +
+  geom_line(aes(y = pl), alpha = 0.5, color = 'red', linetype = 'dashed') +
+  geom_line(aes(y = pu), alpha = 0.5, color = 'red', linetype = 'dashed') +
+  geom_line(aes(y = `Point Forecast`), color = 'blue', data = dlm_forecast_tibble) +
+  geom_line(aes(y = `Upper 95%`), alpha = 0.5, color = 'blue', alpha = 0.5, linetype = 'dashed', data = dlm_forecast_tibble) +
+  geom_line(aes(y = `Lower 95%`), alpha = 0.5, color = 'blue', alpha = 0.5, linetype = 'dashed', data = dlm_forecast_tibble)
+
+```
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Benefits of State Space
+
+* State-space techniques allow you to __specify system level information__ as part of model. 
+
+* State space models allow you to __infer latent states of system__ from a set of observations.
+
+* These models can be even more useful when __coupled with context specific information__.
+
+* Example: Knowing that COVID-19 cases take between 1 and 14 days for symptoms to appear, we can model existing case data at the present as an autoregressive process of order 14. State Space models are a __generalization of ARIMA__ models.
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Extending State-Space Models
+
+* In our COVID-19 Example, our data are technically count data restricted to non-negative integers. However, our model currently assumes Normally distributed (continuous) errors. Adding a link function to map our data to an appropriate support can be done in state space models.
+
+* Dynamic Linear Regression where coefficients can change through time are a subset of State Space modeling. An example of this is considering the coefficient related to square footage on house prices.
+
+* State-space models can accommodate multivariate observations. We could use multiple counties worth of data in our analysis to understand the relationship and better predict rises in cases in other counties. 
+
+* If making decisions at parts of this time series is important, a __Partially Observed Markov Decision Process__ combines the dynamics of a state-space model with a statistical decision analysis to make decisions sequentially as data is observed. 
+---
+class: bottom, left, inverse
+
+# Evaluating Performance
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Measuring Performance
+
+* Unlike many other data science projects, serial dependence such as in time series datasets __does not allow typical cross-validation methods__. 
+
+* Instead, a common metric used for evaluating predictive performance is __one-step ahead forecasting / prediction__ using all but the some percentage of latter part of the time series. After a prediction is made for one-step ahead and evaluated based on the actual observed value, the model is re-fit using that datapoint to predict the next one-step ahead. 
+
+* One-Step Ahead Forecasting can employ all the common metrics such as MSE and MAD. It is also possible to define __custom loss functions__ as we discussed in Workshop 2 using the Diamond Dataset.
+
+* Defining loss functions related to containment within a confidence / credible interval or width of interval can help guide possible decisions.
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Some Concluding Thoughts
+
+* __Modeling of seasonality__ was not discussed in this workshop. However, this is a large part of time series modeling in general. 
+
+* In our models, we assumed a continuous response in each model despite our data being non-negative integers. Depending on the purpose of your project, this may or may not be a concern. It is important to be aware of the __"probability leakage"__ by not having an appropriately defined support if uncertainty quantification is important to your project.
+
+* 
+
+---
+class: bottom, left, inverse
+
+# Packages and Resources
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Resources for R
+
+* [COVID-19 Data Repository by the Center for Systems Science and Engineering (CSSE) at Johns Hopkins University](https://github.com/CSSEGISandData/COVID-19)
+
+* [Forecasting: Principles and Practices, 3rd Edition](https://otexts.com/fpp3/)
+
+* [Time Series Analysis in R](https://a-little-book-of-r-for-time-series.readthedocs.io/en/latest/src/timeseries.html)
+
+* [dlm Package for R](https://cran.r-project.org/web/packages/dlm/index.html)
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Resources for Python
+
+* [COVID-19 Data Repository by the Center for Systems Science and Engineering (CSSE) at Johns Hopkins University](https://github.com/CSSEGISandData/COVID-19)
+
+* [Forecasting: Principles and Practices, 3rd Edition](https://otexts.com/fpp3/)
+
+* [HMMLearn package for Python](https://github.com/hmmlearn/hmmlearn)
+
+* [PyDLM package for Python](https://pydlm.github.io)
+
+---
+class: bottom, left, inverse
+
+# Questions?
+
+---
+background-image: url(Downloads/rmds-logo-only-black.png)
+background-size: 100px
+background-position: 95% 7%
+
+# Brief Announcements 
+
+* In two weeks, our final workshop of the semester will occur. 
+
+* Wyatt Madden will be discussing epidemiological models
+
+* More information soon for those who have ordered RMDS Swag
+
+* Lots of exciting presentations and events planned for next semester
+
+
+
+
